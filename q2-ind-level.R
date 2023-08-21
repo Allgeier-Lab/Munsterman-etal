@@ -158,24 +158,7 @@ foo <- function(pop_n, pop_mean_size, pop_ldie, pop_reserves_consump, distributi
     dplyr::mutate(tot_scaled = tot_prod/2475/1825) %>%
     foo_mutate()
   
-  intra_sg_agbg_dist <- 
-    dplyr::filter(result$seafloor, timestep == max_i, reef == 0) %>%
-    dplyr::mutate(dist = sqrt(x ^ 2 + y ^ 2), 
-                  dist_class = cut(dist, 
-                                   breaks = seq(from = 0, to = max(dist) + class_width,
-                                                by = class_width), ordered_result = TRUE)) %>%
-    dplyr::select(dist_class, ag_production, bg_production) %>%
-    tidyr::pivot_longer(cols = c(ag_production, bg_production), 
-                        names_to = "part", values_to = "production") %>%
-    dplyr::mutate(distance = dplyr::case_when(dist_class == "(0,5]" ~ "near",
-                                              dist_class != "(0,5]"  ~ "far")) %>%
-    dplyr::group_by(part, distance) %>%
-    dplyr::summarise(tot_value_scaled = (sum(production))/1825, .groups = "drop") %>%
-    dplyr::group_by(distance) %>%
-    dplyr::mutate(tot_prod_scaled = sum(tot_value_scaled)) %>%
-    foo_mutate()
-  
-  return(list(intra_behav = intra_behav, intra_fish = intra_fish, intra_sg_agbg = intra_sg_agbg, intra_sg_agbg_dist = intra_sg_agbg_dist))
+  return(list(intra_behav = intra_behav, intra_fish = intra_fish, intra_sg_agbg = intra_sg_agbg))
   
 }
 
@@ -198,3 +181,198 @@ sbatch_intra <- rslurm::slurm_apply(f = foo, params = input_df,
                                     pkgs = c("arrR", "dplyr"),
                                     rscript_path = rscript_path,
                                     submit = FALSE)
+
+#### Results as list ####
+
+behav_q2 <- rslurm::get_slurm_out(sbatch_intra, outtype = "raw")
+
+#### Summarize data ####
+
+# behavior, fish, sg dfs
+
+behav <- purrr::map(behav_q2[1:2700], "intra_behav")
+behavdf <- behav %>%
+  map_df(as_tibble) 
+
+fish <- purrr::map(behav_q2[1:2700], "intra_fish")
+fishdf <- fish %>%
+  map_df(as_tibble)
+
+sg_agbg <- purrr::map(behav_q2[1:2700], "intra_sg_agbg")
+sg_agbgdf <- sg_agbg %>%
+  map_df(as_tibble)
+
+#### Analyze data ####
+
+library(MuMIn)
+library(qwraps2)
+library(nortest)
+library(MASS)
+library(car)
+library(effectsize)
+
+# rename dataset for analysis
+
+agbg_ana <- sg_agbgdf
+
+zscore <- function(X) { (X-mean(X))/(sd(X)) }
+
+## Regression Models
+
+agbg_ana$bio <- as.factor(agbg_ana$bio)
+agbg_ana$size_struc <- as.factor(agbg_ana$size_struc)
+agbg_ana$intra_mvmnt <- as.factor(agbg_ana$intra_mvmnt) #individual-level behavior
+agbg_ana$mean_mvmnt <- as.factor(agbg_ana$mean_mvmnt) #pop-level behavior
+agbg_ana$agprodz <- zscore(sqrt(agbg_ana$ag_scaled))
+agbg_ana$bgprodz <- zscore(sqrt(agbg_ana$bg_scaled))
+agbg_ana$sgprodz <- zscore(sqrt(agbg_ana$tot_scaled))
+
+# filter by biomass
+
+agbgL <- agbg_ana %>%
+  filter(bio == "low")
+agbgM <- agbg_ana %>%
+  filter(bio == "med")
+agbgH <- agbg_ana %>%
+  filter(bio == "high")
+
+## ag production ##
+
+# low
+modAGL <- lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgL)
+#checks model assumptions
+rm=resid(modAGL)
+fm=fitted(modAGL)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgL$agprodz)
+lillie.test(agbgL$agprodz)
+summary(modAGL)
+eta_squared(car::Anova(modAGL, type = 3), partial = TRUE)
+Anova(modAGL)
+
+# med
+modAGM <- lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgM)
+#checks model assumptions
+rm=resid(modAGM)
+fm=fitted(modAGM)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgM$agprodz)
+lillie.test(agbgM$agprodz)
+summary(modAGM)
+eta_squared(car::Anova(modAGM, type = 3), partial = TRUE)
+Anova(modAGM)
+
+# high
+modAGH <- lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgH)
+#checks model assumptions
+rm=resid(modAGH)
+fm=fitted(modAGH)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgH$agprodz)
+lillie.test(agbgH$agprodz)
+summary(modAGH)
+eta_squared(car::Anova(modAGH, type = 3), partial = TRUE)
+Anova(modAGH)
+
+## bg production ##
+
+# low
+modBGL <- lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgL)
+# checks model assumptions
+rm=resid(modBGL)
+fm=fitted(modBGL)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgL$bgprodz)
+lillie.test(agbgL$bgprodz)
+summary(modBGL)
+eta_squared(car::Anova(modBGL, type = 3), partial = TRUE)
+Anova(modBGL)
+
+# med
+modBGM <- lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgM)
+# checks model assumptions
+rm=resid(modBGM)
+fm=fitted(modBGM)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgM$bgprodz)
+lillie.test(agbgM$bgprodz)
+summary(modBGM)
+eta_squared(car::Anova(modBGM, type = 3), partial = TRUE)
+Anova(modBGM)
+
+# high
+modBGH <- lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgH)
+# checks model assumptions
+rm=resid(modBGH)
+fm=fitted(modBGH)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgH$bgprodz)
+lillie.test(agbgH$bgprodz)
+summary(modBGH)
+eta_squared(car::Anova(modBGH, type = 3), partial = TRUE)
+Anova(modBGH)
+
+## total production ##
+
+# low
+modSGL <- lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgL)
+#checks model assumptions
+rm=resid(modSGL)
+fm=fitted(modSGL)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgL$sgprodz)
+lillie.test(agbgL$sgprodz)
+summary(modSGL)
+eta_squared(car::Anova(modSGL, type = 3), partial = TRUE)
+Anova(modSGL)
+
+# med
+modSGM <- lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgM)
+#checks model assumptions
+rm=resid(modAGM)
+fm=fitted(modAGM)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgM$sgprodz)
+lillie.test(agbgM$sgprodz)
+summary(modSGM)
+eta_squared(car::Anova(modSGM, type = 3), partial = TRUE)
+Anova(modSGM)
+
+# high
+modSGH <- lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgH)
+#checks model assumptions
+rm=resid(modSGH)
+fm=fitted(modSGH)
+mod=lm(rm~fm)
+par(mfrow=c(3,2))
+plot(mod)
+hist(rm)
+shapiro.test(agbgH$agprodz)
+lillie.test(agbgH$agprodz)
+summary(modSGH)
+eta_squared(car::Anova(modSGH, type = 3), partial = TRUE)
+Anova(modSGH)
