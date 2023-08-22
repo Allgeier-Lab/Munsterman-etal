@@ -215,24 +215,17 @@ sg_agbg_distdf <- sg_agbg_dist %>%
 
 #### Analyze data ####
 
-library(MuMIn)
-library(qwraps2)
-library(nortest)
-library(MASS)
 library(car)
 library(effectsize)
+library(purrr)
 
-# sort data
+# Wrangle data
 
 foragemeandf <- behavmeandf %>%
   filter(behavior == "forage") %>%
   dplyr::select(-behavior, -bio, -size_struc, -pop_reserves_consump)
 
-# bind foragemeandf df with raw sg datasets to analyze
-
 agbg_ana <- cbind(foragemeandf, sg_agbgdf)
-
-# wrangle distance data for analysis
 
 agbg_dist_ana <- sg_agbg_distdf %>%
   dplyr::mutate(prod_area = dplyr::case_when(
@@ -261,7 +254,7 @@ tot_dist_ana <- cbind(forage_tot, tot_dist_ana)
 
 zscore <- function(X) { (X-mean(X))/(sd(X)) }
 
-## Regression Models
+## Regression models
 
 agbg_ana$bio <- as.factor(agbg_ana$bio)
 agbg_ana$size_struc <- as.factor(agbg_ana$size_struc)
@@ -270,278 +263,49 @@ agbg_ana$bgprodz <- zscore(sqrt(agbg_ana$bg_scaled))
 agbg_ana$sgprodz <- zscore(sqrt(agbg_ana$tot_scaled))
 agbg_ana$propz <- zscore(sqrt(agbg_ana$prop))
 
-# filter by biomass
-agbgL <- agbg_ana %>%
-  filter(bio == "low")
-agbgM <- agbg_ana %>%
-  filter(bio == "med")
-agbgH <- agbg_ana %>%
-  filter(bio == "high")
+get_eta <- function(model) eta_squared(car::Anova(model, type = 3), partial = TRUE)
 
-## ag production ##
+# agpp
+fit_ag_model <- function(agbg_ana) lm(agprodz ~ size_struc*propz, data = agbg_ana)
 
-# low
-modAGL <- lm(agprodz ~ size_struc*propz, data = agbgL)
-#checks model assumptions
-rm=resid(modAGL)
-fm=fitted(modAGL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgL$agprodz)
-lillie.test(agbgL$agprodz)
-summary(modAGL)
-eta_squared(car::Anova(modAGL, type = 3), partial = TRUE)
-Anova(modAGL)
+ag_models <- agbg_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_ag_model),
+         eta = map(model, get_eta))
+# bgpp
+fit_bg_model <- function(agbg_ana) lm(bgprodz ~ size_struc*propz, data = agbg_ana)
 
-# med
-modAGM <- lm(agprodz ~ size_struc*propz, data = agbgM)
-#checks model assumptions
-rm=resid(modAGM)
-fm=fitted(modAGM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgM$agprodz)
-lillie.test(agbgM$agprodz)
-summary(modAGM)
-eta_squared(car::Anova(modAGM, type = 3), partial = TRUE)
-Anova(modAGM)
+bg_models <- agbg_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_bg_model),
+         eta = map(model, get_eta))
 
-# high
-modAGH <- lm(agprodz ~ size_struc*propz, data = agbgH)
-#checks model assumptions
-rm=resid(modAGH)
-fm=fitted(modAGH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgH$agprodz)
-lillie.test(agbgH$agprodz)
-summary(modAGH)
-eta_squared(car::Anova(modAGH, type = 3), partial = TRUE)
-Anova(modAGH)
+# tlpp
+fit_sg_model <- function(agbg_ana) lm(sgprodz ~ size_struc*propz, data = agbg_ana)
 
-## bg production ##
+sg_models <- agbg_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_sg_model),
+         eta = map(model, get_eta))
 
-# low
-modBGL <- lm(bgprodz ~ size_struc*propz, data = agbgL)
-# checks model assumptions
-rm=resid(modBGL)
-fm=fitted(modBGL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgL$bgprodz)
-lillie.test(agbgL$bgprodz)
-summary(modBGL)
-eta_squared(car::Anova(modBGL, type = 3), partial = TRUE)
-Anova(modBGL)
-
-# med
-modBGM <- lm(bgprodz ~ size_struc*propz, data = agbgM)
-# checks model assumptions
-rm=resid(modBGM)
-fm=fitted(modBGM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgM$bgprodz)
-lillie.test(agbgM$bgprodz)
-summary(modBGM)
-eta_squared(car::Anova(modBGM, type = 3), partial = TRUE)
-Anova(modBGM)
-
-# high
-modBGH <- lm(bgprodz ~ size_struc*propz, data = agbgH)
-# checks model assumptions
-rm=resid(modBGH)
-fm=fitted(modBGH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgH$bgprodz)
-lillie.test(agbgH$bgprodz)
-summary(modBGH)
-eta_squared(car::Anova(modBGH, type = 3), partial = TRUE)
-Anova(modBGH)
-
-## total production ##
-
-# low
-modSGL <- lm(sgprodz ~ size_struc*propz, data = agbgL)
-#checks model assumptions
-rm=resid(modSGL)
-fm=fitted(modSGL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgL$sgprodz)
-lillie.test(agbgL$sgprodz)
-summary(modSGL)
-eta_squared(car::Anova(modSGL, type = 3), partial = TRUE)
-Anova(modSGL)
-
-# med
-modSGM <- lm(sgprodz ~ size_struc*propz, data = agbgM)
-#checks model assumptions
-rm=resid(modAGM)
-fm=fitted(modAGM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgM$sgprodz)
-lillie.test(agbgM$sgprodz)
-summary(modSGM)
-eta_squared(car::Anova(modSGM, type = 3), partial = TRUE)
-Anova(modSGM)
-
-# high
-modSGH <- lm(sgprodz ~ size_struc*propz, data = agbgH)
-#checks model assumptions
-rm=resid(modSGH)
-fm=fitted(modSGH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgH$agprodz)
-lillie.test(agbgH$agprodz)
-summary(modSGH)
-eta_squared(car::Anova(modSGH, type = 3), partial = TRUE)
-Anova(modSGH)
-
-# seagrass production at distance
-## tot production near ##
-
+# tlpp near
 tot_near_ana <- tot_dist_ana %>%
   dplyr::filter(distance == "near")
 
-tot_near_ana$bio <- as.factor(tot_near_ana$bio)
-tot_near_ana$size_struc <- as.factor(tot_near_ana$size_struc)
-tot_near_ana$prodz <- zscore(log(tot_near_ana$prod_area))
-tot_near_ana$propz <- zscore(asin(sqrt(tot_near_ana$prop)))
+fit_near_model <- function(tot_near_ana) lm(prodz ~ size_struc*propz, data = tot_near_ana)
 
-# filter by biomass
-nearL <- tot_near_ana %>%
-  filter(bio == "low")
-nearM <- tot_near_ana %>%
-  filter(bio == "med")
-nearH <- tot_near_ana %>%
-  filter(bio == "high")
+near_models <- tot_near_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_near_model),
+         eta = map(model, get_eta))
 
-# low
-modNL <- lm(prodz ~ size_struc*propz, data = nearL)
-# checks model assumptions
-rm=resid(modNL)
-fm=fitted(modNL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(nearL$prodz)
-lillie.test(nearL$prodz)
-summary(modNL)
-eta_squared(car::Anova(modNL, type = 3), partial = TRUE)
-Anova(modNL)
-
-# med
-modNM <- lm(prodz ~ size_struc*propz, data = nearM)
-# checks model assumptions
-rm=resid(modNM)
-fm=fitted(modNM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(nearM$prodz)
-lillie.test(nearM$prodz)
-summary(modNM)
-eta_squared(car::Anova(modNM, type = 3), partial = TRUE)
-Anova(modNM)
-
-# high
-modNH <- lm(prodz ~ size_struc*propz, data = nearH)
-# checks model assumptions
-rm=resid(modNH)
-fm=fitted(modNH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(nearH$prodz)
-lillie.test(nearH$prodz)
-summary(modNH)
-eta_squared(car::Anova(modNH, type = 3), partial = TRUE)
-Anova(modNH)
-
-## tot production far ##
-
+# tlpp far
 tot_far_ana <- tot_dist_ana %>%
   dplyr::filter(distance == "far")
 
-tot_far_ana$bio <- as.factor(tot_far_ana$bio)
-tot_far_ana$size_struc <- as.factor(tot_far_ana$size_struc)
-tot_far_ana$prodz <- zscore(log(tot_far_ana$prod_area))
-tot_far_ana$propz <- zscore(asin(sqrt(tot_far_ana$prop)))
+fit_far_model <- function(tot_far_ana) lm(prodz ~ size_struc*propz, data = tot_far_ana)
 
-# filter by biomass
-farL <- tot_far_ana %>%
-  filter(bio == "low")
-farM <- tot_far_ana %>%
-  filter(bio == "med")
-farH <- tot_far_ana %>%
-  filter(bio == "high")
-
-# low
-modFL <- lm(prodz ~ size_struc*propz, data = farL)
-# checks model assumptions
-rm=resid(modFL)
-fm=fitted(modFL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(farL$prodz)
-lillie.test(farL$prodz)
-summary(modFL)
-eta_squared(car::Anova(modFL, type = 3), partial = TRUE)
-Anova(modFL)
-
-# med
-modFM <- lm(prodz ~ size_struc*propz, data = farM)
-# checks model assumptions
-rm=resid(modFM)
-fm=fitted(modFM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(farM$prodz)
-lillie.test(farM$prodz)
-summary(modFM)
-eta_squared(car::Anova(modFM, type = 3), partial = TRUE)
-Anova(modFM)
-
-# high
-modFH <- lm(prodz ~ size_struc*propz, data = farH)
-# checks model assumptions
-rm=resid(modFH)
-fm=fitted(modFH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(farH$prodz)
-lillie.test(farH$prodz)
-summary(modFH)
-eta_squared(car::Anova(modFH, type = 3), partial = TRUE)
-Anova(modFH)
+far_models <- tot_far_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_far_model),
+         eta = map(model, get_eta))

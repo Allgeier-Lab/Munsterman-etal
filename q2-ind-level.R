@@ -204,12 +204,9 @@ sg_agbgdf <- sg_agbg %>%
 
 #### Analyze data ####
 
-library(MuMIn)
-library(qwraps2)
-library(nortest)
-library(MASS)
 library(car)
 library(effectsize)
+library(purrr)
 
 # rename dataset for analysis
 
@@ -227,152 +224,27 @@ agbg_ana$agprodz <- zscore(sqrt(agbg_ana$ag_scaled))
 agbg_ana$bgprodz <- zscore(sqrt(agbg_ana$bg_scaled))
 agbg_ana$sgprodz <- zscore(sqrt(agbg_ana$tot_scaled))
 
-# filter by biomass
+get_eta <- function(model) eta_squared(car::Anova(model, type = 3), partial = TRUE)
 
-agbgL <- agbg_ana %>%
-  filter(bio == "low")
-agbgM <- agbg_ana %>%
-  filter(bio == "med")
-agbgH <- agbg_ana %>%
-  filter(bio == "high")
+# agpp
+fit_ag_model <- function(agbg_ana) lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbg_ana)
 
-## ag production ##
+ag_models <- agbg_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_ag_model),
+         eta = map(model, get_eta))
+# bgpp
+fit_bg_model <- function(agbg_ana) lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbg_ana)
 
-# low
-modAGL <- lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgL)
-#checks model assumptions
-rm=resid(modAGL)
-fm=fitted(modAGL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgL$agprodz)
-lillie.test(agbgL$agprodz)
-summary(modAGL)
-eta_squared(car::Anova(modAGL, type = 3), partial = TRUE)
-Anova(modAGL)
+bg_models <- agbg_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_bg_model),
+         eta = map(model, get_eta))
 
-# med
-modAGM <- lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgM)
-#checks model assumptions
-rm=resid(modAGM)
-fm=fitted(modAGM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgM$agprodz)
-lillie.test(agbgM$agprodz)
-summary(modAGM)
-eta_squared(car::Anova(modAGM, type = 3), partial = TRUE)
-Anova(modAGM)
+# tlpp
+fit_sg_model <- function(agbg_ana) lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbg_ana)
 
-# high
-modAGH <- lm(agprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgH)
-#checks model assumptions
-rm=resid(modAGH)
-fm=fitted(modAGH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgH$agprodz)
-lillie.test(agbgH$agprodz)
-summary(modAGH)
-eta_squared(car::Anova(modAGH, type = 3), partial = TRUE)
-Anova(modAGH)
-
-## bg production ##
-
-# low
-modBGL <- lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgL)
-# checks model assumptions
-rm=resid(modBGL)
-fm=fitted(modBGL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgL$bgprodz)
-lillie.test(agbgL$bgprodz)
-summary(modBGL)
-eta_squared(car::Anova(modBGL, type = 3), partial = TRUE)
-Anova(modBGL)
-
-# med
-modBGM <- lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgM)
-# checks model assumptions
-rm=resid(modBGM)
-fm=fitted(modBGM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgM$bgprodz)
-lillie.test(agbgM$bgprodz)
-summary(modBGM)
-eta_squared(car::Anova(modBGM, type = 3), partial = TRUE)
-Anova(modBGM)
-
-# high
-modBGH <- lm(bgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgH)
-# checks model assumptions
-rm=resid(modBGH)
-fm=fitted(modBGH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgH$bgprodz)
-lillie.test(agbgH$bgprodz)
-summary(modBGH)
-eta_squared(car::Anova(modBGH, type = 3), partial = TRUE)
-Anova(modBGH)
-
-## total production ##
-
-# low
-modSGL <- lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgL)
-#checks model assumptions
-rm=resid(modSGL)
-fm=fitted(modSGL)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgL$sgprodz)
-lillie.test(agbgL$sgprodz)
-summary(modSGL)
-eta_squared(car::Anova(modSGL, type = 3), partial = TRUE)
-Anova(modSGL)
-
-# med
-modSGM <- lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgM)
-#checks model assumptions
-rm=resid(modAGM)
-fm=fitted(modAGM)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgM$sgprodz)
-lillie.test(agbgM$sgprodz)
-summary(modSGM)
-eta_squared(car::Anova(modSGM, type = 3), partial = TRUE)
-Anova(modSGM)
-
-# high
-modSGH <- lm(sgprodz ~ size_struc*intra_mvmnt*mean_mvmnt, data = agbgH)
-#checks model assumptions
-rm=resid(modSGH)
-fm=fitted(modSGH)
-mod=lm(rm~fm)
-par(mfrow=c(3,2))
-plot(mod)
-hist(rm)
-shapiro.test(agbgH$agprodz)
-lillie.test(agbgH$agprodz)
-summary(modSGH)
-eta_squared(car::Anova(modSGH, type = 3), partial = TRUE)
-Anova(modSGH)
+sg_models <- agbg_ana %>% 
+  group_nest(bio) %>% 
+  mutate(model = map(data, fit_sg_model),
+         eta = map(model, get_eta))
