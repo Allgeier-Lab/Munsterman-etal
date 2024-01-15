@@ -1,4 +1,4 @@
 # Munsterman-etal
-"Optimal foraging theory from the bottom-up? Implications for primary production around artificial reefs"
+"Smaller and bolder fish enhance ecosystem-scale primary production around artificial reefs in seagrass beds"
 Katrina S. Munsterman, Maximilian H.K. Hesselbarth, Jacob E. Allgeier. 
-Submitted to Ecology.
+Submitted to Journal of Applied Ecology.
